@@ -1,0 +1,50 @@
+# Environment variables — NEVER commit these
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+.pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+*.cover
+*.log
+
+# Data directories (uploads, models, db)
+data/uploads/
+data/models/
+data/db/
+data/faiss_indexes/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kiro specs (optional — remove if you want to track them)
+# .kiro/
