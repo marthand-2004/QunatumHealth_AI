@@ -1,0 +1,14 @@
+{
+  "name": "playwright-auth-automation",
+  "version": "1.0.0",
+  "description": "Playwright automated test suite for Owlet Campus Sign-Up and Sign-In flows",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "fast-check": "^3.19.0"
+  }
+}
