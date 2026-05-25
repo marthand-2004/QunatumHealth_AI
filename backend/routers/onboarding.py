@@ -20,6 +20,9 @@ router = APIRouter()
 
 class LifestyleProfileIn(BaseModel):
     bmi: float = Field(..., gt=0, description="Body Mass Index (must be > 0)")
+    age: float = Field(..., gt=0, le=120, description="Age in years")
+    systolic_bp: float = Field(..., gt=0, description="Systolic blood pressure (mmHg)")
+    diastolic_bp: float = Field(..., gt=0, description="Diastolic blood pressure (mmHg)")
     family_history: dict[str, bool] = Field(
         ...,
         description='Family history of target diseases, e.g. {"diabetes": true, "cvd": false, "ckd": false}',
@@ -35,6 +38,7 @@ class LifestyleProfileIn(BaseModel):
 
 class LifestyleProfileOut(LifestyleProfileIn):
     user_id: str
+    smoking_encoded: float = 0.0
     updated_at: datetime
 
     model_config = {"populate_by_name": True}
@@ -45,6 +49,18 @@ def _serialize(doc: dict) -> dict:
     out = {k: v for k, v in doc.items() if k != "_id"}
     out["user_id"] = str(out["user_id"])
     return out
+
+
+def _encode_smoking(status: str) -> float:
+    """Encode smoking_status to the numeric value used by v2 models."""
+    return {"never": 0.0, "former": 0.5, "current": 1.0}.get(status, 0.0)
+
+
+def _enrich_payload(payload: LifestyleProfileIn) -> dict:
+    """Convert the incoming payload to a dict and add derived fields."""
+    data = payload.model_dump()
+    data["smoking_encoded"] = _encode_smoking(payload.smoking_status)
+    return data
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -66,7 +82,7 @@ async def create_lifestyle_profile(
             status_code=status.HTTP_409_CONFLICT,
             detail="Lifestyle profile already exists. Use PUT /api/onboarding/profile to update it.",
         )
-    doc = await create_profile(db, user_id, payload.model_dump())
+    doc = await create_profile(db, user_id, _enrich_payload(payload))
     return _serialize(doc)
 
 
@@ -81,5 +97,5 @@ async def update_lifestyle_profile(
     Records an ``updated_at`` timestamp on every update.
     """
     user_id = str(current_user["_id"])
-    doc = await update_profile(db, user_id, payload.model_dump())
+    doc = await update_profile(db, user_id, _enrich_payload(payload))
     return _serialize(doc)

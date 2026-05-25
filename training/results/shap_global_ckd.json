@@ -1,0 +1,32 @@
+{
+  "disease": "ckd",
+  "model": "rf",
+  "features": [
+    "creatinine",
+    "hemoglobin",
+    "systolic_bp",
+    "diastolic_bp",
+    "age"
+  ],
+  "mean_abs_shap": [
+    0.283945,
+    0.169818,
+    0.021766,
+    0.021196,
+    0.021073
+  ],
+  "top_3": [
+    {
+      "feature": "creatinine",
+      "mean_abs_shap": 0.283945
+    },
+    {
+      "feature": "hemoglobin",
+      "mean_abs_shap": 0.169818
+    },
+    {
+      "feature": "systolic_bp",
+      "mean_abs_shap": 0.021766
+    }
+  ]
+}

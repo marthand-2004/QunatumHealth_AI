@@ -7,6 +7,8 @@ Requirements: 5.2, 5.3, 5.4, 5.6, 5.7
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 # ---------------------------------------------------------------------------
@@ -37,12 +39,30 @@ _pca_matrix, _, _ = np.linalg.svd(_raw, full_matrices=False)
 # _pca_matrix shape: (14, 6)
 
 # ---------------------------------------------------------------------------
-# Random (untrained) VQC weights — shape: (N_DISEASES, N_LAYERS, N_QUBITS, 3)
+# Weight loading — check training/models/ for trained weights
 # ---------------------------------------------------------------------------
-_weight_rng = np.random.default_rng(7)
-_vqc_weights: np.ndarray = _weight_rng.uniform(
-    -np.pi, np.pi, size=(N_DISEASES, N_LAYERS, N_QUBITS, 3)
+_TRAINING_MODELS_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "..", "training", "models"
 )
+
+def _load_vqc_weights(disease_idx: int) -> np.ndarray:
+    """Load trained VQC weights if available, else use random seeded weights."""
+    disease_names = ["diabetes", "cvd", "ckd"]
+    disease = disease_names[disease_idx]
+
+    # Check training/models/ first
+    trained_path = os.path.join(_TRAINING_MODELS_DIR, f"vqc_{disease}_weights.npy")
+    if os.path.exists(trained_path):
+        try:
+            weights = np.load(trained_path)
+            logger.info("Loaded trained VQC weights for %s from %s", disease, trained_path)
+            return weights
+        except Exception as exc:
+            logger.warning("Failed to load trained weights for %s: %s", disease, exc)
+
+    # Fall back to random seeded weights
+    _weight_rng = np.random.default_rng(7)
+    return _weight_rng.uniform(-np.pi, np.pi, size=(N_DISEASES, N_LAYERS, N_QUBITS, 3))[disease_idx]
 
 
 def _project_features(features: list[float]) -> np.ndarray:

@@ -69,16 +69,17 @@ export default function UploadOCR({ onVerified }: Props) {
           if (ocr_status === "complete") {
             stopPolling();
             const result = await getOCRResult(job.job_id);
-            if (result.lab_parameters.length === 0) {
-              setErrorMsg(
-                "No lab values could be extracted. Please enter your values manually."
-              );
-              setStage("error");
-              return;
-            }
             setOcrResult(result);
-            setEditedParams(result.lab_parameters.map((p) => ({ ...p })));
-            setStage("review");
+
+            if (result.lab_parameters.length === 0) {
+              // OCR completed but no structured params found
+              // Show manual entry mode instead of hard error
+              setEditedParams([]);
+              setStage("review"); // still go to review — user can add manually
+            } else {
+              setEditedParams(result.lab_parameters.map((p) => ({ ...p })));
+              setStage("review");
+            }
           } else if (ocr_status === "failed") {
             stopPolling();
             setErrorMsg(
@@ -133,13 +134,25 @@ export default function UploadOCR({ onVerified }: Props) {
 
   async function handleConfirm() {
     if (!ocrResult) return;
-    setStage("uploading"); // reuse spinner
+    setStage("uploading");
+    setErrorMsg(null);
     try {
-      await verifyDocument(ocrResult.document_id ?? ocrResult.job_id, editedParams);
+      // Use job_id as the document ID (they are the same)
+      const docId = ocrResult.document_id ?? ocrResult.job_id;
+      await verifyDocument(docId, editedParams);
       setStage("confirmed");
-      onVerified?.(ocrResult.document_id);
-    } catch {
-      setErrorMsg("Failed to save verified values. Please try again.");
+      onVerified?.(docId);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: unknown } } };
+      const detail = axiosErr.response?.data?.detail;
+      let msg = "Failed to save verified values. Please try again.";
+      if (typeof detail === "string") msg = detail;
+      else if (Array.isArray(detail)) {
+        msg = detail.map((d: { msg?: string; loc?: string[] }) =>
+          `${d.loc?.slice(-1)[0] ?? "field"}: ${d.msg}`
+        ).join("; ");
+      }
+      setErrorMsg(msg);
       setStage("review");
     }
   }
@@ -170,82 +183,121 @@ export default function UploadOCR({ onVerified }: Props) {
 
   // ── Review ───────────────────────────────────────────────────────────────────
   if (stage === "review" && ocrResult) {
+    const hasParams = editedParams.length > 0;
+
     return (
       <div className="space-y-4">
-        <p className="text-sm text-gray-600">
-          Review the extracted values below. Edit any incorrect entries before confirming.
-        </p>
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium text-gray-600">Parameter</th>
-                <th className="px-4 py-2 text-left font-medium text-gray-600">Value</th>
-                <th className="px-4 py-2 text-left font-medium text-gray-600">Unit</th>
-                <th className="px-4 py-2 text-left font-medium text-gray-600">Reference</th>
-                <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {editedParams.map((param, i) => (
-                <tr
-                  key={param.name}
-                  className={param.is_abnormal ? "bg-red-50" : ""}
-                >
-                  <td className="px-4 py-2 font-medium text-gray-800 capitalize">
-                    {param.name.replace(/_/g, " ")}
-                  </td>
-                  <td className="px-4 py-2">
-                    <input
-                      type="number"
-                      step="any"
-                      value={param.value}
-                      onChange={(e) => updateParam(i, e.target.value)}
-                      aria-label={`Edit value for ${param.name}`}
-                      className={`w-24 rounded border px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        param.is_abnormal
-                          ? "border-red-400 bg-red-50 text-red-700"
-                          : "border-gray-300"
-                      }`}
-                    />
-                  </td>
-                  <td className="px-4 py-2 text-gray-600">{param.unit}</td>
-                  <td className="px-4 py-2 text-gray-500">
-                    {param.reference_range[0]}–{param.reference_range[1]}
-                  </td>
-                  <td className="px-4 py-2">
-                    {param.is_abnormal ? (
-                      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                        Abnormal
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                        Normal
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {errorMsg && (
-          <p role="alert" className="text-sm text-red-600">
-            {errorMsg}
+        {!hasParams ? (
+          <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4">
+            <p className="text-sm font-medium text-yellow-800 mb-1">
+              No lab values were automatically extracted.
+            </p>
+            <p className="text-xs text-yellow-700">
+              The report was uploaded successfully. You can add values manually below or try uploading a clearer image.
+            </p>
+            {ocrResult.extracted_text && (
+              <details className="mt-2">
+                <summary className="text-xs text-yellow-600 cursor-pointer">Show extracted text</summary>
+                <pre className="mt-1 text-xs text-gray-600 whitespace-pre-wrap max-h-32 overflow-y-auto bg-white p-2 rounded border">
+                  {ocrResult.extracted_text}
+                </pre>
+              </details>
+            )}
+            <button
+              onClick={() => {
+                // Add a blank row for manual entry
+                setEditedParams([{
+                  name: "",
+                  value: 0,
+                  unit: "",
+                  reference_range: [0, 999999],
+                  is_abnormal: false,
+                  raw_text: "",
+                }]);
+              }}
+              className="mt-3 text-sm bg-yellow-600 text-white px-3 py-1.5 rounded hover:bg-yellow-700"
+            >
+              + Add value manually
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-600">
+            Review the extracted values below. Edit any incorrect entries before confirming.
           </p>
         )}
+
+        {hasParams && (
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600">Parameter</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600">Value</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600">Unit</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600">Reference</th>
+                  <th className="px-4 py-2 text-left font-medium text-gray-600">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {editedParams.map((param, i) => (
+                  <tr key={i} className={param.is_abnormal ? "bg-red-50" : ""}>
+                    <td className="px-4 py-2 font-medium text-gray-800 capitalize">
+                      {param.name.replace(/_/g, " ")}
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number"
+                        step="any"
+                        value={param.value}
+                        onChange={(e) => updateParam(i, e.target.value)}
+                        aria-label={`Edit value for ${param.name}`}
+                        className={`w-24 rounded border px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          param.is_abnormal ? "border-red-400 bg-red-50 text-red-700" : "border-gray-300"
+                        }`}
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">{param.unit}</td>
+                    <td className="px-4 py-2 text-gray-500">
+                      {isFinite(param.reference_range[0]) ? param.reference_range[0] : "—"}
+                      –
+                      {isFinite(param.reference_range[1]) ? param.reference_range[1] : "—"}
+                    </td>
+                    <td className="px-4 py-2">
+                      {param.is_abnormal ? (
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                          Abnormal
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                          Normal
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {errorMsg && (
+          <p role="alert" className="text-sm text-red-600">{errorMsg}</p>
+        )}
+
         <div className="flex gap-3 flex-wrap">
-          <button
-            onClick={handleConfirm}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            Confirm Values
-          </button>
+          {hasParams && (
+            <button
+              onClick={handleConfirm}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Confirm Values
+            </button>
+          )}
           <button
             onClick={reset}
             className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
           >
-            Cancel
+            Upload different file
           </button>
         </div>
       </div>

@@ -1,0 +1,57 @@
+Generating research figures for QuantumHealthAI v2 Enhanced...
+Output directory: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures
+
+[Fig 1] Model Performance Comparison...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig1_model_performance.png
+
+[Fig 1] Multi-panel ROC curves...
+  VQC ROC skipped for diabetes: module 'autoray.autoray' has no attribute 'NumpyMimic'
+  VQC ROC skipped for cvd: module 'autoray.autoray' has no attribute 'NumpyMimic'
+  VQC ROC skipped for ckd: module 'autoray.autoray' has no attribute 'NumpyMimic'
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig1_roc_curves.png
+
+[Fig 2] Model performance comparison...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig2_model_comparison.png
+
+[Fig 3] SHAP global feature importance...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig3_shap_importance.png
+
+[Fig 4] VQC layer comparison...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig4_vqc_comparison.png
+
+[Fig 5] Robustness analysis...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig5_robustness.png
+
+[Fig 6] Fusion weights...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig6_fusion_weights.png
+
+[Fig 7] System architecture diagram...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig7_architecture.png
+
+[Fig 8] VQC circuit diagram...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig8_vqc_circuit.png
+
+[Fig 9] CV stability...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig9_cv_stability.png
+
+[Fig 10] Summary dashboard...
+  Saved: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures\fig10_summary_dashboard.png
+
+============================================================
+All figures generated successfully!
+============================================================
+
+Figures saved to: C:\Users\abhia\OneDrive\Desktop\SDP 2\docs\figures
+
+Figure list:
+  fig10_summary_dashboard.png  (404 KB)
+  fig1_model_performance.png  (180 KB)
+  fig1_roc_curves.png  (185 KB)
+  fig2_model_comparison.png  (144 KB)
+  fig3_shap_importance.png  (179 KB)
+  fig4_vqc_comparison.png  (162 KB)
+  fig5_robustness.png  (181 KB)
+  fig6_fusion_weights.png  (149 KB)
+  fig7_architecture.png  (199 KB)
+  fig8_vqc_circuit.png  (197 KB)
+  fig9_cv_stability.png  (120 KB)

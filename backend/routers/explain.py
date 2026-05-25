@@ -36,7 +36,7 @@ router = APIRouter()
 # Response schema
 # ---------------------------------------------------------------------------
 
-EXPLANATION_TIMEOUT = 10.0  # seconds — Requirement 7.4
+EXPLANATION_TIMEOUT = 30.0  # seconds — increased to allow LLM fallback to template
 
 
 class DiseaseExplanation(BaseModel):

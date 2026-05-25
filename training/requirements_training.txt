@@ -1,0 +1,33 @@
+# Additional dependencies for model training (not needed for production inference)
+
+# Data science
+pandas==2.2.2
+numpy==1.26.4
+scipy==1.13.1
+
+# ML training
+scikit-learn==1.5.1
+xgboost==2.1.1
+imbalanced-learn==0.12.3
+
+# Quantum ML
+pennylane==0.38.0
+autoray==0.6.12
+
+# Explainability
+shap==0.46.0
+
+# Visualization
+matplotlib==3.9.1
+seaborn==0.13.2
+
+# Jupyter (optional, for EDA notebooks)
+jupyter==1.0.0
+ipykernel==6.29.5
+
+# Utilities
+tqdm==4.66.5
+joblib==1.4.2
+
+# Dataset download
+kaggle==1.6.17

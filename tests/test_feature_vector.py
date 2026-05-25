@@ -272,3 +272,133 @@ class TestBuildFeatureVectorAsync:
             assert fv.features[i] == POPULATION_MEANS[name], (
                 f"Feature '{name}' should be imputed to {POPULATION_MEANS[name]}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Property-Based Tests: Feature Mapper (disease-specific vectors)
+# ---------------------------------------------------------------------------
+# Validates: Requirements 1.7
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+from backend.services.feature_mapper import FeatureMapper, DISEASE_FEATURE_SUBSETS
+
+# Reasonable default medians for all features used across diseases
+_DEFAULT_MEDIANS: dict[str, float] = {
+    "glucose": 99.0,
+    "hba1c": 5.7,
+    "bmi": 27.5,
+    "age": 50.0,
+    "systolic_bp": 120.0,
+    "diastolic_bp": 80.0,
+    "creatinine": 0.9,
+    "hemoglobin": 13.5,
+    "cholesterol": 200.0,
+    "smoking_encoded": 0.2,
+}
+
+# Strategy: generate a dict with a subset of known lab/lifestyle feature keys
+_ALL_FEATURE_KEYS = list(_DEFAULT_MEDIANS.keys())
+
+_lab_values_strategy = st.dictionaries(
+    keys=st.sampled_from(_ALL_FEATURE_KEYS),
+    values=st.floats(min_value=0.0, max_value=1000.0, allow_nan=False, allow_infinity=False),
+    min_size=0,
+    max_size=len(_ALL_FEATURE_KEYS),
+)
+
+_lifestyle_strategy = st.dictionaries(
+    keys=st.sampled_from(_ALL_FEATURE_KEYS),
+    values=st.floats(min_value=0.0, max_value=1000.0, allow_nan=False, allow_infinity=False),
+    min_size=0,
+    max_size=len(_ALL_FEATURE_KEYS),
+)
+
+
+class TestFeatureMapperDimensionalityProperty:
+    """Property 1: Disease Feature Vector Dimensionality.
+
+    **Validates: Requirements 1.7**
+
+    For all valid combinations of lab values and lifestyle profiles,
+    the FeatureMapper SHALL produce a vector of exactly the correct
+    length per disease:
+      - diabetes: exactly 6 elements
+      - cvd:      exactly 6 elements
+      - ckd:      exactly 5 elements
+    """
+
+    @given(lab_values=_lab_values_strategy, lifestyle=_lifestyle_strategy)
+    @settings(max_examples=200)
+    def test_diabetes_vector_has_exactly_6_elements(
+        self, lab_values: dict, lifestyle: dict
+    ):
+        """Diabetes feature vector is always exactly 6 elements."""
+        mapper = FeatureMapper(medians=_DEFAULT_MEDIANS)
+        result = mapper.map_features(lab_values, lifestyle, disease="diabetes")
+        assert len(result.features) == 6, (
+            f"Expected 6 features for diabetes, got {len(result.features)}"
+        )
+
+    @given(lab_values=_lab_values_strategy, lifestyle=_lifestyle_strategy)
+    @settings(max_examples=200)
+    def test_cvd_vector_has_exactly_6_elements(
+        self, lab_values: dict, lifestyle: dict
+    ):
+        """CVD feature vector is always exactly 6 elements."""
+        mapper = FeatureMapper(medians=_DEFAULT_MEDIANS)
+        result = mapper.map_features(lab_values, lifestyle, disease="cvd")
+        assert len(result.features) == 6, (
+            f"Expected 6 features for cvd, got {len(result.features)}"
+        )
+
+    @given(lab_values=_lab_values_strategy, lifestyle=_lifestyle_strategy)
+    @settings(max_examples=200)
+    def test_ckd_vector_has_exactly_5_elements(
+        self, lab_values: dict, lifestyle: dict
+    ):
+        """CKD feature vector is always exactly 5 elements."""
+        mapper = FeatureMapper(medians=_DEFAULT_MEDIANS)
+        result = mapper.map_features(lab_values, lifestyle, disease="ckd")
+        assert len(result.features) == 5, (
+            f"Expected 5 features for ckd, got {len(result.features)}"
+        )
+
+    @given(lab_values=_lab_values_strategy, lifestyle=_lifestyle_strategy)
+    @settings(max_examples=100)
+    def test_all_diseases_correct_length_simultaneously(
+        self, lab_values: dict, lifestyle: dict
+    ):
+        """All three diseases produce correct-length vectors from the same inputs."""
+        mapper = FeatureMapper(medians=_DEFAULT_MEDIANS)
+        expected = {"diabetes": 6, "cvd": 6, "ckd": 5}
+        for disease, expected_len in expected.items():
+            result = mapper.map_features(lab_values, lifestyle, disease=disease)
+            assert len(result.features) == expected_len, (
+                f"Expected {expected_len} features for {disease}, "
+                f"got {len(result.features)}"
+            )
+
+    def test_all_features_present_correct_length(self):
+        """Edge case: all features provided — vector length still correct."""
+        mapper = FeatureMapper(medians=_DEFAULT_MEDIANS)
+        full_lab = dict(_DEFAULT_MEDIANS)
+        for disease, expected_len in [("diabetes", 6), ("cvd", 6), ("ckd", 5)]:
+            result = mapper.map_features(full_lab, {}, disease=disease)
+            assert len(result.features) == expected_len
+
+    def test_all_features_missing_correct_length(self):
+        """Edge case: no features provided — imputation still yields correct length."""
+        mapper = FeatureMapper(medians=_DEFAULT_MEDIANS)
+        for disease, expected_len in [("diabetes", 6), ("cvd", 6), ("ckd", 5)]:
+            result = mapper.map_features({}, {}, disease=disease)
+            assert len(result.features) == expected_len
+
+    def test_partial_features_correct_length(self):
+        """Edge case: only some features provided — vector length still correct."""
+        mapper = FeatureMapper(medians=_DEFAULT_MEDIANS)
+        partial_lab = {"glucose": 5.5, "age": 45.0}
+        partial_lifestyle = {"bmi": 24.0}
+        for disease, expected_len in [("diabetes", 6), ("cvd", 6), ("ckd", 5)]:
+            result = mapper.map_features(partial_lab, partial_lifestyle, disease=disease)
+            assert len(result.features) == expected_len

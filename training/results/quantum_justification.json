@@ -1,0 +1,35 @@
+{
+  "diabetes": {
+    "rf_auc": 0.5,
+    "xgb_auc": 0.5,
+    "vqc_2layers_auc": 0.5,
+    "vqc_3layers_auc": 0.5,
+    "vqc_4layers_auc": 0.5,
+    "best_vqc_layers": 4,
+    "best_vqc_auc": 0.5,
+    "best_classical_auc": 0.5,
+    "quantum_improves_generalization": false
+  },
+  "cvd": {
+    "rf_auc": 0.5,
+    "xgb_auc": 0.5,
+    "vqc_2layers_auc": 0.524,
+    "vqc_3layers_auc": 0.5867,
+    "vqc_4layers_auc": 0.8803,
+    "best_vqc_layers": 4,
+    "best_vqc_auc": 0.8982,
+    "best_classical_auc": 0.5,
+    "quantum_improves_generalization": true
+  },
+  "ckd": {
+    "rf_auc": 0.5,
+    "xgb_auc": 0.5,
+    "vqc_2layers_auc": 0.9281,
+    "vqc_3layers_auc": 0.9125,
+    "vqc_4layers_auc": 0.9604,
+    "best_vqc_layers": 4,
+    "best_vqc_auc": 0.9507,
+    "best_classical_auc": 0.5,
+    "quantum_improves_generalization": true
+  }
+}

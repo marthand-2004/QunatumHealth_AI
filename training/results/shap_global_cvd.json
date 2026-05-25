@@ -1,0 +1,34 @@
+{
+  "disease": "cvd",
+  "model": "rf",
+  "features": [
+    "age",
+    "cholesterol",
+    "systolic_bp",
+    "diastolic_bp",
+    "smoking_encoded",
+    "bmi"
+  ],
+  "mean_abs_shap": [
+    0.108379,
+    0.088937,
+    0.115095,
+    0.083126,
+    0.098579,
+    0.058708
+  ],
+  "top_3": [
+    {
+      "feature": "systolic_bp",
+      "mean_abs_shap": 0.115095
+    },
+    {
+      "feature": "age",
+      "mean_abs_shap": 0.108379
+    },
+    {
+      "feature": "smoking_encoded",
+      "mean_abs_shap": 0.098579
+    }
+  ]
+}

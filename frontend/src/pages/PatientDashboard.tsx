@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuthContext } from "../context/AuthContext";
 import OnboardingForm from "../components/OnboardingForm";
 import UploadOCR from "../components/UploadOCR";
@@ -16,12 +17,29 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function PatientDashboard() {
   const { user, logout } = useAuthContext();
-  const [activeTab, setActiveTab] = useState<Tab>("onboarding");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const tab = searchParams.get("tab");
+    return (tab as Tab) || "onboarding";
+  });
   const [verifiedDocId, setVerifiedDocId] = useState<string | null>(null);
+  const [predictionKey, setPredictionKey] = useState(0);
+
+  // Clear the ?tab query param after reading it on first render
+  useEffect(() => {
+    if (searchParams.get("tab")) {
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
 
   function handleDocumentVerified(docId: string) {
     setVerifiedDocId(docId);
+    setPredictionKey(k => k + 1);
     setActiveTab("results");
+  }
+
+  function handleProfileSaved() {
+    setActiveTab("upload");
   }
 
   return (
@@ -96,7 +114,7 @@ export default function PatientDashboard() {
           <p className="mb-5 text-sm text-gray-500">
             Complete your profile so we can personalise your risk predictions.
           </p>
-          <OnboardingForm onComplete={() => setActiveTab("upload")} />
+          <OnboardingForm onComplete={handleProfileSaved} />
         </div>
 
         <div
@@ -130,7 +148,7 @@ export default function PatientDashboard() {
           <h2 className="text-base font-semibold text-gray-800 mb-4">
             Prediction Results
           </h2>
-          <PredictionResults />
+          <PredictionResults predictionId={predictionKey.toString()} documentId={verifiedDocId} />
         </div>
 
         <div

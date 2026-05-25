@@ -1,0 +1,41 @@
+{
+  "diabetes": {
+    "robustness_score": 0.979,
+    "noise_5pct": {
+      "mean_risk_change": 2.1033,
+      "std_risk_change": 2.8357,
+      "pct_changed_risk_level": 3.9216
+    },
+    "noise_10pct": {
+      "mean_risk_change": 3.7603,
+      "std_risk_change": 4.5558,
+      "pct_changed_risk_level": 13.0719
+    }
+  },
+  "cvd": {
+    "robustness_score": 0.9832,
+    "noise_5pct": {
+      "mean_risk_change": 1.6817,
+      "std_risk_change": 2.925,
+      "pct_changed_risk_level": 4.375
+    },
+    "noise_10pct": {
+      "mean_risk_change": 2.1815,
+      "std_risk_change": 3.1951,
+      "pct_changed_risk_level": 4.625
+    }
+  },
+  "ckd": {
+    "robustness_score": 0.9915,
+    "noise_5pct": {
+      "mean_risk_change": 0.8466,
+      "std_risk_change": 2.3786,
+      "pct_changed_risk_level": 1.25
+    },
+    "noise_10pct": {
+      "mean_risk_change": 2.1352,
+      "std_risk_change": 6.7047,
+      "pct_changed_risk_level": 3.75
+    }
+  }
+}

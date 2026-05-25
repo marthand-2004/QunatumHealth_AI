@@ -26,8 +26,9 @@ xgboost==2.1.1
 shap==0.46.0
 
 # ── OCR ───────────────────────────────────────────────────────────────────────
+ocrmypdf==16.10.1        # local PDF OCR — replaces Gemini Vision for PDFs
 pytesseract==0.3.13
-paddleocr==2.8.1
+paddleocr==2.8.1         # image OCR fallback (JPEG/PNG)
 Pillow==10.4.0
 
 # ── PDF ───────────────────────────────────────────────────────────────────────

@@ -466,3 +466,64 @@ async def predict_combined(
         fallback_used=fallback_used,
         timestamp=now,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /latest — fetch the most recent prediction for the logged-in user
+# ---------------------------------------------------------------------------
+
+class LatestPredictionResponse(BaseModel):
+    id: str
+    user_id: str
+    feature_vector_id: str
+    model_used: str
+    risk_scores: dict[str, float]
+    quantum_scores: Optional[dict[str, float]]
+    classical_scores: Optional[dict[str, float]]
+    fallback_used: bool = False
+    timestamp: datetime
+
+    model_config = {"protected_namespaces": ()}
+
+
+@router.get("/latest", response_model=LatestPredictionResponse)
+async def get_latest_prediction(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the most recent prediction for the authenticated user.
+
+    Returns HTTP 404 if no predictions exist yet.
+    """
+    user_id = str(current_user["_id"])
+    user_oid = ObjectId(user_id)
+
+    # Query by both ObjectId and string — handles both storage formats
+    pred_doc = await db["predictions"].find_one(
+        {"$or": [{"user_id": user_oid}, {"user_id": user_id}]},
+        sort=[("timestamp", -1)],
+    )
+    if pred_doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No predictions found. Upload a medical report to get started.",
+        )
+
+    try:
+        return LatestPredictionResponse(
+            id=str(pred_doc["_id"]),
+            user_id=user_id,
+            feature_vector_id=str(pred_doc.get("feature_vector_id", "")),
+            model_used=pred_doc.get("model_used", "classical"),
+            risk_scores=pred_doc.get("risk_scores", {}),
+            quantum_scores=pred_doc.get("quantum_scores"),
+            classical_scores=pred_doc.get("classical_scores"),
+            fallback_used=pred_doc.get("model_used") == "classical",
+            timestamp=pred_doc.get("timestamp", datetime.utcnow()),
+        )
+    except Exception as exc:
+        logger.error("Error serializing prediction %s: %s", pred_doc.get("_id"), exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error loading prediction: {exc}",
+        )

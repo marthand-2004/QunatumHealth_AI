@@ -7,6 +7,7 @@ import hashlib
 import io
 import logging
 import os
+import subprocess
 import time
 from datetime import datetime
 
@@ -32,6 +33,19 @@ except Exception:
 try:
     import pytesseract as _pytesseract  # type: ignore
     from PIL import Image as _PILImage  # type: ignore
+    # Auto-configure Tesseract path on Windows
+    import platform as _platform
+    if _platform.system() == "Windows":
+        import os as _os
+        _tess_paths = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            _os.path.join(_os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
+        ]
+        for _tp in _tess_paths:
+            if _os.path.exists(_tp):
+                _pytesseract.pytesseract.tesseract_cmd = _tp
+                break
     _tesseract_available = True
 except Exception:
     _pytesseract = None
@@ -70,6 +84,16 @@ except Exception:
     _pillow_available = False
     _PdfReader = None
     _pypdf2_available = False
+
+# OCRmyPDF — local PDF OCR engine (Python API preferred, subprocess CLI fallback)
+try:
+    import ocrmypdf
+    import ocrmypdf.exceptions
+    _ocrmypdf_available = True
+except ImportError:
+    ocrmypdf = None
+    _ocrmypdf_available = False
+    logger.warning("ocrmypdf package not available — will fall back to subprocess CLI")
 
 # Supported MIME types and their canonical extensions
 ALLOWED_CONTENT_TYPES = {
@@ -250,39 +274,70 @@ def _extract_images_from_pdf(pdf_bytes: bytes) -> list[bytes]:
     return images
 
 
-def _extract_text_gemini_vision(image_bytes: bytes, mime_type: str = "image/jpeg") -> list[str]:
-    """Use Gemini Vision to extract text from an image (lab report).
-    
-    Returns list of text lines. Falls back gracefully if API key not set.
-    """
-    if not settings.GEMINI_API_KEY:
-        return []
+def _run_ocrmypdf_python_api(input_path: str, output_path: str) -> None:
+    """Run OCRmyPDF via its Python API (synchronous, call inside run_in_executor)."""
     try:
-        import google.generativeai as genai  # type: ignore
-        import base64
+        ocrmypdf.ocr(input_path, output_path, skip_text=True, output_type="pdf")
+    except ocrmypdf.exceptions.PriorOcrFoundError:
+        # Already has text layer — retry with skip_text explicitly (no-op retry guard)
+        ocrmypdf.ocr(input_path, output_path, skip_text=True, output_type="pdf")
+    except ocrmypdf.exceptions.EncryptedPdfError as e:
+        logger.warning("OCRmyPDF: PDF is encrypted: %s", e)
+        raise RuntimeError("PDF is encrypted and cannot be OCR-processed") from e
+    except ocrmypdf.exceptions.InputFileError as e:
+        logger.warning("OCRmyPDF: Input file error: %s", e)
+        raise RuntimeError(f"OCRmyPDF input file error: {e}") from e
+    except Exception as e:
+        logger.exception("OCRmyPDF Python API error: %s", e)
+        raise RuntimeError(f"OCRmyPDF failed: {e}") from e
 
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
 
-        prompt = (
-            "Extract ALL text from this medical lab report image. "
-            "Return each line of text exactly as it appears, preserving numbers, units, and reference ranges. "
-            "Focus on test names, result values, units, and reference intervals. "
-            "Return plain text only, one item per line."
+def _run_ocrmypdf_subprocess(input_path: str, output_path: str) -> None:
+    """Run OCRmyPDF via subprocess CLI (fallback when Python API unavailable)."""
+    try:
+        result = subprocess.run(
+            ["ocrmypdf", "--skip-text", "--output-type", "pdf", input_path, output_path],
+            capture_output=True,
+            text=True,
+            timeout=110,  # slightly under the 120s outer timeout
         )
+        if result.returncode != 0:
+            logger.error("ocrmypdf CLI stderr: %s", result.stderr)
+            raise RuntimeError(f"ocrmypdf CLI failed (exit {result.returncode}): {result.stderr}")
+    except FileNotFoundError:
+        raise RuntimeError("ocrmypdf CLI not found on PATH — install ocrmypdf or add to PATH")
 
-        image_data = base64.b64encode(image_bytes).decode("utf-8")
-        response = model.generate_content([
-            prompt,
-            {"mime_type": mime_type, "data": image_data}
-        ])
-        text = response.text or ""
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        logger.info("Gemini Vision extracted %d lines", len(lines))
-        return lines
-    except Exception as exc:
-        logger.warning("Gemini Vision OCR failed: %s", exc)
-        return []
+
+def _ocr_pdf_to_searchable(pdf_bytes: bytes) -> bytes:
+    """
+    Write pdf_bytes to a temp file, run OCRmyPDF, return searchable PDF bytes.
+    Cleans up both temp files in try/finally regardless of success or failure.
+    """
+    import tempfile
+
+    # Write input temp file
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        input_path = f.name
+        f.write(pdf_bytes)
+
+    # Create output temp file
+    output_fd, output_path = tempfile.mkstemp(suffix=".pdf")
+    os.close(output_fd)
+
+    try:
+        if _ocrmypdf_available:
+            _run_ocrmypdf_python_api(input_path, output_path)
+        else:
+            _run_ocrmypdf_subprocess(input_path, output_path)
+
+        with open(output_path, "rb") as f:
+            return f.read()
+    finally:
+        for path in (input_path, output_path):
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
 
 
 def _extract_text_from_pdf_bytes(pdf_bytes: bytes) -> list[str]:
@@ -350,6 +405,80 @@ def _ocr_image_bytes(image_bytes: bytes) -> list[str]:
     return _merge_deduplicate(paddle_lines, tess_lines)
 
 
+def _extract_lab_params_via_gemini(extracted_text: str) -> list[dict]:
+    """Use Gemini to extract structured lab parameters from OCR text.
+
+    Returns a list of lab parameter dicts compatible with the LabParameter model.
+    Used as fallback when regex parsing finds nothing.
+    """
+    import json
+    import google.generativeai as genai  # type: ignore
+
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-2.5-flash")
+
+    prompt = (
+        "Extract all lab test results from the following medical report text.\n"
+        "Return a JSON array of objects. Each object must have:\n"
+        "  - name: test name in snake_case (e.g. hemoglobin, wbc_count, platelet_count)\n"
+        "  - value: numeric result as a float\n"
+        "  - unit: unit string (e.g. g/dL, %, /µL, mmol/L)\n"
+        "  - reference_low: lower bound of normal range (float, use 0 if unknown)\n"
+        "  - reference_high: upper bound of normal range (float, use 999999 if unknown)\n\n"
+        "Return ONLY the JSON array, no explanation.\n\n"
+        f"Text:\n{extracted_text[:3000]}"
+    )
+
+    response = model.generate_content(prompt)
+    raw = response.text.strip()
+
+    # Strip markdown fences
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+
+    items = json.loads(raw)
+    if not isinstance(items, list):
+        return []
+
+    from backend.services.document_intelligence import _NAME_ALIASES, _REFERENCE_RANGES, flag_abnormal
+    from backend.models.document import LabParameter
+
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).lower().strip().replace(" ", "_")
+        # Try to canonicalize
+        canonical = _NAME_ALIASES.get(name, name)
+        try:
+            value = float(item.get("value", 0))
+        except (TypeError, ValueError):
+            continue
+        unit = str(item.get("unit", ""))
+        ref_low = float(item.get("reference_low", 0))
+        ref_high = float(item.get("reference_high", 999999))
+
+        # Use known reference ranges if available
+        known_ref = _REFERENCE_RANGES.get(canonical)
+        if known_ref:
+            ref_low = known_ref[0] if known_ref[0] is not None else ref_low
+            ref_high = known_ref[1] if known_ref[1] is not None else ref_high
+
+        param = LabParameter(
+            name=canonical,
+            value=value,
+            unit=unit,
+            reference_range=(ref_low, ref_high),
+            is_abnormal=False,
+            raw_text=str(item),
+        )
+        flagged = flag_abnormal(param)
+        result.append(flagged.model_dump())
+
+    return result
+
+
 async def run_ocr_background(
     db: AsyncIOMotorDatabase,
     job_id: str,
@@ -367,7 +496,7 @@ async def run_ocr_background(
     Requirements: 3.2, 3.3, 3.6
     """
     start = time.monotonic()
-    deadline = 30.0  # seconds
+    deadline = 120.0  # seconds — OCRmyPDF needs more time for large scanned PDFs
 
     async def _update(fields: dict) -> None:
         await db["documents"].update_one(
@@ -391,66 +520,37 @@ async def run_ocr_background(
         all_lines: list[str] = []
 
         if is_pdf:
-            # Try fast pure-Python PDF extraction first (pdfplumber/PyPDF2)
-            fast_lines = _extract_text_from_pdf_bytes(raw_bytes)
-            if fast_lines:
-                all_lines = fast_lines
-                logger.info("PDF text extracted via pdfplumber for job %s", job_id)
-            else:
-                # Fall back to image-based OCR
-                try:
-                    page_images: list[bytes] = await asyncio.wait_for(
-                        asyncio.get_event_loop().run_in_executor(
-                            None, _extract_images_from_pdf, raw_bytes
-                        ),
-                        timeout=max(1.0, deadline - (time.monotonic() - start)),
-                    )
-                except Exception as exc:
-                    logger.warning("PDF→image conversion failed: %s.", exc)
-                    page_images = []
-
-                for page_bytes in page_images:
-                    remaining = deadline - (time.monotonic() - start)
-                    if remaining <= 0:
-                        break
-                    try:
-                        lines = await asyncio.wait_for(
-                            asyncio.get_event_loop().run_in_executor(
-                                None, _ocr_image_bytes, page_bytes
-                            ),
-                            timeout=remaining,
-                        )
-                        all_lines.extend(lines)
-                    except asyncio.TimeoutError:
-                        logger.warning("OCR timed out on a PDF page for job %s", job_id)
-                        break
-                    except Exception as exc:
-                        logger.warning("OCR error on PDF page for job %s: %s", job_id, exc)
+            # Run OCRmyPDF to produce a searchable PDF, then extract text
+            try:
+                searchable_pdf_bytes: bytes = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, _ocr_pdf_to_searchable, raw_bytes
+                    ),
+                    timeout=max(1.0, deadline - (time.monotonic() - start)),
+                )
+                all_lines = _extract_text_from_pdf_bytes(searchable_pdf_bytes)
+                logger.info("PDF OCR complete via OCRmyPDF for job %s (%d lines)", job_id, len(all_lines))
+            except asyncio.TimeoutError:
+                logger.warning("OCRmyPDF timed out for job %s", job_id)
+                raise
+            except Exception as exc:
+                logger.warning("OCRmyPDF failed for job %s: %s — falling back to direct text extraction", job_id, exc)
+                # Graceful fallback: try extracting text directly from the original PDF
+                all_lines = _extract_text_from_pdf_bytes(raw_bytes)
         else:
-            # Image file — try Gemini Vision first (fast, no local install needed)
+            # Image file — use local OCR engines
             remaining = deadline - (time.monotonic() - start)
 
-            # Detect mime type from file extension
-            if file_path.lower().endswith(".png.enc") or file_path.lower().endswith(".png"):
-                mime_type = "image/png"
-            else:
-                mime_type = "image/jpeg"
-
-            # Try Gemini Vision (best for scanned lab reports)
-            gemini_lines = _extract_text_gemini_vision(raw_bytes, mime_type)
-            if gemini_lines:
-                all_lines = gemini_lines
-            else:
-                # Fall back to local OCR engines
-                try:
-                    all_lines = await asyncio.wait_for(
-                        asyncio.get_event_loop().run_in_executor(
-                            None, _ocr_image_bytes, raw_bytes
-                        ),
-                        timeout=max(1.0, remaining),
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning("OCR timed out for job %s", job_id)
+            # Fall back to local OCR engines
+            try:
+                all_lines = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        None, _ocr_image_bytes, raw_bytes
+                    ),
+                    timeout=max(1.0, remaining),
+                )
+            except asyncio.TimeoutError:
+                logger.warning("OCR timed out for job %s", job_id)
 
         extracted_text = "\n".join(all_lines)
         zero_text = len(extracted_text.strip()) == 0
@@ -462,9 +562,17 @@ async def run_ocr_background(
                 from backend.services.document_intelligence import extract_lab_parameters
                 params = extract_lab_parameters(extracted_text)
                 lab_parameters = [p.model_dump() for p in params]
-                logger.info("Extracted %d lab parameters for job %s", len(lab_parameters), job_id)
+                logger.info("Extracted %d lab parameters via regex for job %s", len(lab_parameters), job_id)
             except Exception as exc:
                 logger.warning("Lab parameter extraction failed for job %s: %s", job_id, exc)
+
+            # If regex found nothing, try Gemini structured extraction as fallback
+            if not lab_parameters and settings.GEMINI_API_KEY:
+                try:
+                    lab_parameters = _extract_lab_params_via_gemini(extracted_text)
+                    logger.info("Extracted %d lab parameters via Gemini for job %s", len(lab_parameters), job_id)
+                except Exception as exc:
+                    logger.warning("Gemini structured extraction failed for job %s: %s", job_id, exc)
 
         update_fields: dict = {
             "ocr_status": "complete",

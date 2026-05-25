@@ -1,0 +1,8 @@
+{
+  "python": "3.11.7",
+  "sklearn": "1.5.1",
+  "xgboost": "2.1.1",
+  "pennylane": "0.40.0",
+  "numpy": "1.26.4",
+  "platform": "Windows-10-10.0.26200-SP0"
+}

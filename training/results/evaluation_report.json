@@ -1,0 +1,89 @@
+{
+  "diabetes": {
+    "rf": {
+      "mean_auc": 0.8108,
+      "std_auc": 0.0332,
+      "test_auc": 0.8048,
+      "accuracy": 0.7492,
+      "precision": 0.6661,
+      "recall": 0.5774,
+      "f1": 0.6164
+    },
+    "xgb": {
+      "mean_auc": 0.8155,
+      "std_auc": 0.0352,
+      "test_auc": 0.8209,
+      "accuracy": 0.7508,
+      "precision": 0.629,
+      "recall": 0.7181,
+      "f1": 0.669
+    },
+    "vqc": {
+      "mean_auc": 0.8108,
+      "std_auc": 0.0332,
+      "test_auc": 0.7119,
+      "accuracy": 0.7492,
+      "precision": 0.6661,
+      "recall": 0.5774,
+      "f1": 0.6164
+    }
+  },
+  "cvd": {
+    "rf": {
+      "mean_auc": 0.9365,
+      "std_auc": 0.0107,
+      "test_auc": 0.9337,
+      "accuracy": 0.9241,
+      "precision": 0.8431,
+      "recall": 0.6083,
+      "f1": 0.7057
+    },
+    "xgb": {
+      "mean_auc": 0.9353,
+      "std_auc": 0.0119,
+      "test_auc": 0.9403,
+      "accuracy": 0.8916,
+      "precision": 0.6116,
+      "recall": 0.7646,
+      "f1": 0.6789
+    },
+    "vqc": {
+      "mean_auc": 0.9365,
+      "std_auc": 0.0107,
+      "test_auc": 0.8982,
+      "accuracy": 0.9241,
+      "precision": 0.8431,
+      "recall": 0.6083,
+      "f1": 0.7057
+    }
+  },
+  "ckd": {
+    "rf": {
+      "mean_auc": 0.9922,
+      "std_auc": 0.0047,
+      "test_auc": 0.9877,
+      "accuracy": 0.95,
+      "precision": 0.9699,
+      "recall": 0.95,
+      "f1": 0.9593
+    },
+    "xgb": {
+      "mean_auc": 0.9922,
+      "std_auc": 0.0029,
+      "test_auc": 0.986,
+      "accuracy": 0.9563,
+      "precision": 0.9701,
+      "recall": 0.96,
+      "f1": 0.9647
+    },
+    "vqc": {
+      "mean_auc": 0.9922,
+      "std_auc": 0.0047,
+      "test_auc": 0.9507,
+      "accuracy": 0.95,
+      "precision": 0.9699,
+      "recall": 0.95,
+      "f1": 0.9593
+    }
+  }
+}

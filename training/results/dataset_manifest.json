@@ -1,0 +1,48 @@
+{
+  "diabetes_pima": {
+    "path": "..\\datasets\\diabetes_pima.csv",
+    "sha256": "1a659e6f1a4b4260f5d691ba17b568a1f7de003d5f98eb2e19ad2bdbd57ad36e",
+    "row_count": 768,
+    "column_names": [
+      "Pregnancies",
+      "Glucose",
+      "BloodPressure",
+      "SkinThickness",
+      "Insulin",
+      "BMI",
+      "DiabetesPedigreeFunction",
+      "Age",
+      "Outcome"
+    ]
+  },
+  "framingham_cvd": {
+    "path": "..\\datasets\\framingham_cvd.csv",
+    "sha256": "f9cd9554da084b2b33af6606ed1612aafa3566aa1cc2362a8d2eabb3de9258dd",
+    "row_count": 4000,
+    "column_names": [
+      "age",
+      "totChol",
+      "sysBP",
+      "diaBP",
+      "BMI",
+      "cigsPerDay",
+      "glucose",
+      "TenYearCHD"
+    ]
+  },
+  "ckd_uci": {
+    "path": "..\\datasets\\ckd_uci.csv",
+    "sha256": "3919ec971a04abd7740cf43fd0bac738137246d64aa5dbc66e93ab330e29fd52",
+    "row_count": 400,
+    "column_names": [
+      "age",
+      "bp",
+      "bgr",
+      "bu",
+      "sc",
+      "hemo",
+      "pcv",
+      "classification"
+    ]
+  }
+}

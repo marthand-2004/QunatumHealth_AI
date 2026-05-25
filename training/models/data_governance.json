@@ -1,0 +1,380 @@
+{
+  "diabetes": {
+    "disease_feature_subset": [
+      "glucose",
+      "hba1c",
+      "bmi",
+      "age",
+      "systolic_bp",
+      "diastolic_bp"
+    ],
+    "train_size": 610,
+    "test_size": 153,
+    "train_class_distribution": {
+      "0": 397,
+      "1": 213
+    },
+    "test_class_distribution": {
+      "0": 100,
+      "1": 53
+    },
+    "subset_medians": {
+      "glucose": 6.550179999999999,
+      "hba1c": 5.4,
+      "bmi": 32.0,
+      "age": 29.0,
+      "systolic_bp": 72.0,
+      "diastolic_bp": 48.24
+    },
+    "subset_iqr_fences": {
+      "glucose": {
+        "lower": 2.1371349999999985,
+        "upper": 11.240775000000001
+      },
+      "hba1c": {
+        "lower": 5.4,
+        "upper": 5.4
+      },
+      "bmi": {
+        "lower": 13.050000000000006,
+        "upper": 51.04999999999999
+      },
+      "age": {
+        "lower": -1.125,
+        "upper": 65.875
+      },
+      "systolic_bp": {
+        "lower": 35.0,
+        "upper": 107.0
+      },
+      "diastolic_bp": {
+        "lower": 23.449999999999996,
+        "upper": 71.69
+      }
+    },
+    "all_feature_medians": {
+      "glucose": 6.550179999999999,
+      "hba1c": 5.4,
+      "creatinine": 80.0,
+      "cholesterol": 5.0,
+      "triglycerides": 1.3,
+      "hemoglobin": 14.0,
+      "bmi": 32.0,
+      "age": 29.0,
+      "systolic_bp": 72.0,
+      "diastolic_bp": 48.24,
+      "smoking_encoded": 0.0,
+      "exercise_frequency": 3.0,
+      "sleep_hours": 7.0,
+      "stress_level": 5.0
+    },
+    "all_feature_iqr_fences": {
+      "glucose": {
+        "lower": 2.1371349999999985,
+        "upper": 11.240775000000001
+      },
+      "hba1c": {
+        "lower": 5.4,
+        "upper": 5.4
+      },
+      "creatinine": {
+        "lower": 80.0,
+        "upper": 80.0
+      },
+      "cholesterol": {
+        "lower": 5.0,
+        "upper": 5.0
+      },
+      "triglycerides": {
+        "lower": 1.3,
+        "upper": 1.3
+      },
+      "hemoglobin": {
+        "lower": 14.0,
+        "upper": 14.0
+      },
+      "bmi": {
+        "lower": 13.050000000000006,
+        "upper": 51.04999999999999
+      },
+      "age": {
+        "lower": -1.125,
+        "upper": 65.875
+      },
+      "systolic_bp": {
+        "lower": 35.0,
+        "upper": 107.0
+      },
+      "diastolic_bp": {
+        "lower": 23.449999999999996,
+        "upper": 71.69
+      },
+      "smoking_encoded": {
+        "lower": 0.0,
+        "upper": 0.0
+      },
+      "exercise_frequency": {
+        "lower": 3.0,
+        "upper": 3.0
+      },
+      "sleep_hours": {
+        "lower": 7.0,
+        "upper": 7.0
+      },
+      "stress_level": {
+        "lower": 5.0,
+        "upper": 5.0
+      }
+    }
+  },
+  "cvd": {
+    "disease_feature_subset": [
+      "age",
+      "cholesterol",
+      "systolic_bp",
+      "diastolic_bp",
+      "smoking_encoded",
+      "bmi"
+    ],
+    "train_size": 3200,
+    "test_size": 800,
+    "train_class_distribution": {
+      "0": 2720,
+      "1": 480
+    },
+    "test_class_distribution": {
+      "0": 680,
+      "1": 120
+    },
+    "subset_medians": {
+      "age": 46.76456209920883,
+      "cholesterol": 5.282406336490155,
+      "systolic_bp": 127.8435782638447,
+      "diastolic_bp": 81.54962778902728,
+      "smoking_encoded": 0.5,
+      "bmi": 25.503916733403436
+    },
+    "subset_iqr_fences": {
+      "age": {
+        "lower": 18.29879926831873,
+        "upper": 74.93257835717068
+      },
+      "cholesterol": {
+        "lower": 2.2937844261786284,
+        "upper": 8.293054720165863
+      },
+      "systolic_bp": {
+        "lower": 70.49749662746362,
+        "upper": 185.78525155626895
+      },
+      "diastolic_bp": {
+        "lower": 48.56837280948377,
+        "upper": 113.98177434592986
+      },
+      "smoking_encoded": {
+        "lower": -0.75,
+        "upper": 1.25
+      },
+      "bmi": {
+        "lower": 11.452371833747709,
+        "upper": 39.703807975726804
+      }
+    },
+    "all_feature_medians": {
+      "glucose": 4.793607785441854,
+      "hba1c": 5.4,
+      "creatinine": 80.0,
+      "cholesterol": 5.282406336490155,
+      "triglycerides": 1.3,
+      "hemoglobin": 14.0,
+      "bmi": 25.503916733403436,
+      "age": 46.76456209920883,
+      "systolic_bp": 127.8435782638447,
+      "diastolic_bp": 81.54962778902728,
+      "smoking_encoded": 0.5,
+      "exercise_frequency": 3.0,
+      "sleep_hours": 7.0,
+      "stress_level": 5.0
+    },
+    "all_feature_iqr_fences": {
+      "glucose": {
+        "lower": 1.7097474691116288,
+        "upper": 7.9446709526718235
+      },
+      "hba1c": {
+        "lower": 5.4,
+        "upper": 5.4
+      },
+      "creatinine": {
+        "lower": 80.0,
+        "upper": 80.0
+      },
+      "cholesterol": {
+        "lower": 2.2937844261786284,
+        "upper": 8.293054720165863
+      },
+      "triglycerides": {
+        "lower": 1.3,
+        "upper": 1.3
+      },
+      "hemoglobin": {
+        "lower": 14.0,
+        "upper": 14.0
+      },
+      "bmi": {
+        "lower": 11.452371833747709,
+        "upper": 39.703807975726804
+      },
+      "age": {
+        "lower": 18.29879926831873,
+        "upper": 74.93257835717068
+      },
+      "systolic_bp": {
+        "lower": 70.49749662746362,
+        "upper": 185.78525155626895
+      },
+      "diastolic_bp": {
+        "lower": 48.56837280948377,
+        "upper": 113.98177434592986
+      },
+      "smoking_encoded": {
+        "lower": -0.75,
+        "upper": 1.25
+      },
+      "exercise_frequency": {
+        "lower": 3.0,
+        "upper": 3.0
+      },
+      "sleep_hours": {
+        "lower": 7.0,
+        "upper": 7.0
+      },
+      "stress_level": {
+        "lower": 5.0,
+        "upper": 5.0
+      }
+    }
+  },
+  "ckd": {
+    "disease_feature_subset": [
+      "creatinine",
+      "hemoglobin",
+      "systolic_bp",
+      "diastolic_bp",
+      "age"
+    ],
+    "train_size": 320,
+    "test_size": 80,
+    "train_class_distribution": {
+      "0": 120,
+      "1": 200
+    },
+    "test_class_distribution": {
+      "0": 30,
+      "1": 50
+    },
+    "subset_medians": {
+      "creatinine": 195.85410431233143,
+      "hemoglobin": 11.796953255752435,
+      "systolic_bp": 76.36586164350666,
+      "diastolic_bp": 51.16512730114947,
+      "age": 50.754731889426424
+    },
+    "subset_iqr_fences": {
+      "creatinine": {
+        "lower": -444.4808763655303,
+        "upper": 960.6736596440576
+      },
+      "hemoglobin": {
+        "lower": 4.065691362276772,
+        "upper": 20.493190054482824
+      },
+      "systolic_bp": {
+        "lower": 29.695075718559977,
+        "upper": 123.74772867995951
+      },
+      "diastolic_bp": {
+        "lower": 19.895700731435195,
+        "upper": 82.91097821557287
+      },
+      "age": {
+        "lower": 7.761713901583217,
+        "upper": 92.61235137218458
+      }
+    },
+    "all_feature_medians": {
+      "glucose": 8.023978797465208,
+      "hba1c": 5.4,
+      "creatinine": 195.85410431233143,
+      "cholesterol": 5.0,
+      "triglycerides": 1.3,
+      "hemoglobin": 11.796953255752435,
+      "bmi": 25.0,
+      "age": 50.754731889426424,
+      "systolic_bp": 76.36586164350666,
+      "diastolic_bp": 51.16512730114947,
+      "smoking_encoded": 0.0,
+      "exercise_frequency": 3.0,
+      "sleep_hours": 7.0,
+      "stress_level": 5.0
+    },
+    "all_feature_iqr_fences": {
+      "glucose": {
+        "lower": -0.5672997633187649,
+        "upper": 16.39520123222126
+      },
+      "hba1c": {
+        "lower": 5.4,
+        "upper": 5.4
+      },
+      "creatinine": {
+        "lower": -444.4808763655303,
+        "upper": 960.6736596440576
+      },
+      "cholesterol": {
+        "lower": 5.0,
+        "upper": 5.0
+      },
+      "triglycerides": {
+        "lower": 1.3,
+        "upper": 1.3
+      },
+      "hemoglobin": {
+        "lower": 4.065691362276772,
+        "upper": 20.493190054482824
+      },
+      "bmi": {
+        "lower": 25.0,
+        "upper": 25.0
+      },
+      "age": {
+        "lower": 7.761713901583217,
+        "upper": 92.61235137218458
+      },
+      "systolic_bp": {
+        "lower": 29.695075718559977,
+        "upper": 123.74772867995951
+      },
+      "diastolic_bp": {
+        "lower": 19.895700731435195,
+        "upper": 82.91097821557287
+      },
+      "smoking_encoded": {
+        "lower": 0.0,
+        "upper": 0.0
+      },
+      "exercise_frequency": {
+        "lower": 3.0,
+        "upper": 3.0
+      },
+      "sleep_hours": {
+        "lower": 7.0,
+        "upper": 7.0
+      },
+      "stress_level": {
+        "lower": 5.0,
+        "upper": 5.0
+      }
+    }
+  }
+}

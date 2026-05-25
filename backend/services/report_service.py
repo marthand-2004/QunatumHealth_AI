@@ -3,7 +3,7 @@
 Uses ReportLab for PDF layout. If ReportLab is not installed, falls back to
 a minimal plain-bytes PDF so the rest of the system can still be tested.
 
-Requirements: 11.1, 11.2, 11.3, 11.4, 11.5
+Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 22.4
 """
 from __future__ import annotations
 
@@ -12,12 +12,13 @@ import logging
 import os
 import secrets
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from backend.core.config import settings
+from backend.services.limitations_module import get_disclaimer, get_limitations
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +68,46 @@ def _build_pdf_reportlab(
     prediction: dict,
     lab_parameters: list[dict],
     recommendations: list[dict],
+    *,
+    disclaimer: Optional[str] = None,
+    limitations: Optional[list[str]] = None,
+    triggered_rules: Optional[dict[str, list[str]]] = None,
+    shap_features: Optional[dict[str, list[dict]]] = None,
 ) -> bytes:
-    """Build a formatted PDF using ReportLab and return the bytes."""
+    """Build a formatted PDF using ReportLab and return the bytes.
+
+    Parameters
+    ----------
+    patient:
+        Patient document dict.
+    prediction:
+        Prediction document dict (v1 or v2 format).
+    lab_parameters:
+        List of lab parameter dicts with ``name``, ``value``, ``unit``,
+        ``is_abnormal`` keys.
+    recommendations:
+        List of recommendation dicts.
+    disclaimer:
+        Ethics disclaimer string (Req 22.4).  When *None* the value from
+        :func:`~backend.services.limitations_module.get_disclaimer` is used.
+    limitations:
+        List of standardised limitation strings (Req 11.4).  When *None* the
+        value from :func:`~backend.services.limitations_module.get_limitations`
+        is used.
+    triggered_rules:
+        Mapping of ``{disease: [rule_description, ...]}`` for clinical rules
+        that fired during prediction (Req 11.4, 22.4).
+    shap_features:
+        Mapping of ``{disease: [{feature_name, shap_value, direction}, ...]}``
+        containing the top-3 SHAP features per disease with direction labels
+        (Req 11.4, 22.4).
+    """
+    # Resolve v2 fields — fall back to module defaults when not supplied
+    _disclaimer: str = disclaimer if disclaimer is not None else get_disclaimer()
+    _limitations: list[str] = limitations if limitations is not None else get_limitations()
+    _triggered_rules: dict[str, list[str]] = triggered_rules or {}
+    _shap_features: dict[str, list[dict]] = shap_features or {}
+
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -186,9 +225,39 @@ def _build_pdf_reportlab(
         story.append(lt)
         story.append(Spacer(1, 0.3 * cm))
 
-    # ── SHAP summary ──────────────────────────────────────────────────────
+    # ── SHAP feature importance (v2 — top-3 per disease with direction) ──
+    # shap_values is the legacy v1 format from the prediction dict
     shap_values: dict = prediction.get("shap_values") or {}
-    if shap_values:
+    if _shap_features:
+        story.append(Paragraph("SHAP Feature Importance — Top 3 Factors per Disease", heading_style))
+        shap_header = [["Disease", "Feature", "SHAP Value", "Direction"]]
+        shap_rows: list[list[str]] = []
+        for disease, features in _shap_features.items():
+            for feat in features[:3]:
+                shap_rows.append([
+                    disease.capitalize(),
+                    feat.get("feature_name", ""),
+                    f"{feat.get('shap_value', 0):.4f}",
+                    feat.get("direction", ""),
+                ])
+        if shap_rows:
+            shap_table_data = shap_header + shap_rows
+            shap_col_widths = [4 * cm, 5 * cm, 4 * cm, 4 * cm]
+            shap_tbl = Table(shap_table_data, colWidths=shap_col_widths)
+            shap_tbl.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2563EB")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("PADDING", (0, 0), (-1, -1), 5),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F3F4F6")]),
+            ]))
+            story.append(shap_tbl)
+            story.append(Spacer(1, 0.3 * cm))
+    elif shap_values:
+        # ── Legacy SHAP summary (v1 format) ──────────────────────────────
         story.append(Paragraph("SHAP Feature Importance (Top Factors)", heading_style))
         shap_data = [["Feature", "SHAP Value (avg abs)"]]
         for disease, vals in shap_values.items():
@@ -209,6 +278,28 @@ def _build_pdf_reportlab(
             story.append(st)
             story.append(Spacer(1, 0.3 * cm))
 
+    # ── Triggered clinical rules ──────────────────────────────────────────
+    if _triggered_rules:
+        story.append(Paragraph("Triggered Clinical Rules", heading_style))
+        rules_data = [["Disease", "Rule"]]
+        for disease, rules in _triggered_rules.items():
+            for rule in rules:
+                rules_data.append([disease.capitalize(), rule])
+        if len(rules_data) > 1:
+            rules_tbl = Table(rules_data, colWidths=[5 * cm, 12 * cm])
+            rules_tbl.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DC2626")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("PADDING", (0, 0), (-1, -1), 5),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FEF2F2")]),
+            ]))
+            story.append(rules_tbl)
+            story.append(Spacer(1, 0.3 * cm))
+
     # ── Recommendations ───────────────────────────────────────────────────
     if recommendations:
         story.append(Paragraph("Recommendations", heading_style))
@@ -219,15 +310,48 @@ def _build_pdf_reportlab(
             story.append(Paragraph(f"<b>[{disease.capitalize()}]</b> {text}{physician}", normal))
             story.append(Spacer(1, 0.15 * cm))
 
-    # ── Disclaimer ────────────────────────────────────────────────────────
+    # ── Ethics disclaimer (Req 22.4) ──────────────────────────────────────
     story.append(Spacer(1, 0.5 * cm))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.grey))
-    disclaimer = (
-        "<i>This report is generated for informational purposes only and does not "
-        "constitute medical advice. Please consult a licensed physician for diagnosis "
-        "and treatment decisions.</i>"
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#DC2626")))
+    story.append(Spacer(1, 0.2 * cm))
+    disclaimer_style = ParagraphStyle(
+        "EthicsDisclaimer",
+        parent=normal,
+        fontSize=9,
+        textColor=colors.HexColor("#DC2626"),
+        spaceAfter=6,
     )
-    story.append(Paragraph(disclaimer, ParagraphStyle("Disclaimer", parent=normal, fontSize=8, textColor=colors.grey)))
+    story.append(Paragraph(f"<b>⚠ IMPORTANT NOTICE:</b> {_disclaimer}", disclaimer_style))
+
+    # ── Limitations (Req 11.4) ────────────────────────────────────────────
+    if _limitations:
+        story.append(Spacer(1, 0.3 * cm))
+        story.append(Paragraph("Known Limitations", heading_style))
+        limitations_style = ParagraphStyle(
+            "Limitations",
+            parent=normal,
+            fontSize=9,
+            textColor=colors.HexColor("#374151"),
+            leftIndent=10,
+            spaceAfter=4,
+        )
+        for item in _limitations:
+            story.append(Paragraph(f"• {item}", limitations_style))
+
+    # ── Footer rule ───────────────────────────────────────────────────────
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.grey))
+    footer_style = ParagraphStyle(
+        "Footer",
+        parent=normal,
+        fontSize=8,
+        textColor=colors.grey,
+    )
+    story.append(Paragraph(
+        "<i>This report was generated by QuantumHealthAI. "
+        "All predictions are for clinical decision support only.</i>",
+        footer_style,
+    ))
 
     doc.build(story)
     return buf.getvalue()
@@ -238,15 +362,46 @@ def generate_pdf(
     prediction: dict,
     lab_parameters: list[dict],
     recommendations: list[dict],
+    *,
+    disclaimer: Optional[str] = None,
+    limitations: Optional[list[str]] = None,
+    triggered_rules: Optional[dict[str, list[str]]] = None,
+    shap_features: Optional[dict[str, list[dict]]] = None,
 ) -> bytes:
     """Generate a PDF report and return the raw bytes.
 
     Uses ReportLab when available; falls back to a minimal PDF otherwise.
-    Requirement 11.1, 11.2
+
+    Parameters
+    ----------
+    patient, prediction, lab_parameters, recommendations:
+        Core report data (same as before).
+    disclaimer:
+        Ethics disclaimer string (Req 22.4).  Defaults to the value from
+        :func:`~backend.services.limitations_module.get_disclaimer`.
+    limitations:
+        Standardised limitation strings (Req 11.4).  Defaults to the value
+        from :func:`~backend.services.limitations_module.get_limitations`.
+    triggered_rules:
+        ``{disease: [rule, ...]}`` mapping of fired clinical rules (Req 22.4).
+    shap_features:
+        ``{disease: [{feature_name, shap_value, direction}, ...]}`` top-3
+        SHAP features per disease with direction labels (Req 22.4).
+
+    Requirements: 11.1, 11.2, 11.4, 22.4
     """
     if _REPORTLAB_AVAILABLE:
         try:
-            return _build_pdf_reportlab(patient, prediction, lab_parameters, recommendations)
+            return _build_pdf_reportlab(
+                patient,
+                prediction,
+                lab_parameters,
+                recommendations,
+                disclaimer=disclaimer,
+                limitations=limitations,
+                triggered_rules=triggered_rules,
+                shap_features=shap_features,
+            )
         except Exception as exc:  # pragma: no cover
             logger.error("ReportLab PDF generation failed: %s", exc)
             return _minimal_pdf(f"QuantumHealthAI Report — generation error: {exc}")

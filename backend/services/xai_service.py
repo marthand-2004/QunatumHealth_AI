@@ -395,6 +395,7 @@ def _call_openai(prompt: str) -> str:
         messages=[{"role": "user", "content": prompt}],
         max_tokens=300,
         temperature=0.4,
+        timeout=8.0,  # hard timeout — prevent hanging the explain endpoint
     )
     return response.choices[0].message.content.strip()
 

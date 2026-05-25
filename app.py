@@ -12,6 +12,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from backend.core.config import settings
 from backend.routers import auth, onboarding, ocr, documents, predict, explain, recommendations, assistant, clinical, reports
+from backend.routers import predict_v2, research
 
 
 @asynccontextmanager
@@ -49,12 +50,15 @@ app.include_router(auth.router,            prefix="/api/auth",            tags=[
 app.include_router(onboarding.router,      prefix="/api/onboarding",      tags=["onboarding"])
 app.include_router(ocr.router,             prefix="/api/ocr",             tags=["ocr"])
 app.include_router(documents.router,       prefix="/api/documents",       tags=["documents"])
+app.include_router(predict_v2.router,      prefix="/api/predict",         tags=["predict-v2"])
 app.include_router(predict.router,         prefix="/api/predict",         tags=["predict"])
 app.include_router(explain.router,         prefix="/api/explain",         tags=["explain"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
 app.include_router(assistant.router,       prefix="/api/assistant",       tags=["assistant"])
 app.include_router(clinical.router,        prefix="/api/clinical",        tags=["clinical"])
 app.include_router(reports.router,         prefix="/api/reports",         tags=["reports"])
+app.include_router(research.router,        prefix="/api/research",        tags=["research"])
+app.include_router(research.admin_router,  prefix="/api/admin",           tags=["admin"])
 
 
 @app.get("/health", tags=["health"])

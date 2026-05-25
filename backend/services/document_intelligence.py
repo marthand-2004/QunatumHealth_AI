@@ -132,6 +132,7 @@ _NAME_ALIASES: dict[str, str] = {
     "blood glucose": "glucose",
     "fasting glucose": "glucose",
     "fasting blood glucose": "glucose",
+    "fasting blood sugar": "glucose",
     "fbs": "glucose",
     "rbs": "glucose",
     "random blood sugar": "glucose",
@@ -146,9 +147,11 @@ _NAME_ALIASES: dict[str, str] = {
     "glycosylated hemoglobin": "hba1c",
     "a1c": "hba1c",
     "glycohemoglobin": "hba1c",
+    "hba1c (glycosylated hemoglobin)": "hba1c",
     # creatinine
     "creatinine": "creatinine",
     "serum creatinine": "creatinine",
+    "creatinine, serum": "creatinine",
     "creat": "creatinine",
     "s. creatinine": "creatinine",
     # cholesterol
@@ -189,6 +192,8 @@ _NAME_ALIASES: dict[str, str] = {
     "urea": "bun",
     "blood urea": "bun",
     "serum urea": "bun",
+    "urea, serum": "bun",
+    "bun (blood urea nitrogen)": "bun",
     # ── CBC parameters ────────────────────────────────────────────────────────
     # RBC
     "rbc": "rbc_count",
@@ -235,6 +240,7 @@ _NAME_ALIASES: dict[str, str] = {
     "rdw": "rdw",
     "rdw-cv": "rdw",
     "rdw cv": "rdw",
+    "rdw-c v": "rdw",
     "red cell distribution width": "rdw",
     "rdw-sd": "rdw_sd",
     # Neutrophils
@@ -277,14 +283,21 @@ _NAME_ALIASES: dict[str, str] = {
 _LAB_LINE_PATTERN = re.compile(
     r"(?P<name>[A-Za-z][A-Za-z0-9 \-\.]*?)"    # parameter name
     r"\s*[:=]\s*"                                # required separator
+    r"[HL]?\s*"                                  # optional H/L flag (high/low marker)
     r"(?P<value>\d+(?:\.\d+)?)"                  # numeric value
     r"\s*"
     r"(?P<unit>[A-Za-zµ%][A-Za-z0-9µ%/]*)?",    # optional unit
     re.IGNORECASE,
 )
 
-# Matches tabular rows: columns separated by 2+ spaces or tabs
+# Matches tabular rows: columns separated by 2+ spaces, tabs, OR single space
+# between a known name token and a value. We use a broad split and rely on
+# _canonicalize_name to filter noise.
 _TABLE_ROW_PATTERN = re.compile(r"[ \t]{2,}|\t")
+
+# Matches an H or L flag immediately before a numeric value (e.g. "H10570", "H 141.0")
+# Used in table parser to strip the flag before parsing the value.
+_HL_FLAG_PATTERN = re.compile(r"^[HL]\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 
 
 def _canonicalize_name(raw_name: str) -> Optional[str]:
@@ -341,77 +354,113 @@ def flag_abnormal(param: LabParameter) -> LabParameter:
         "is_abnormal": abnormal,
         "reference_range": (
             low if low is not None else 0.0,
-            high if high is not None else float("inf"),
+            high if high is not None else 999999.0,  # JSON-safe upper bound
         ),
     })
+
+
+def _split_lab_line(line: str) -> list[str]:
+    """Split a lab report line into columns.
+
+    Tries multi-space/tab split first (ideal case from pdfplumber with preserved
+    spacing). Falls back to single-space split when the line has no multi-space
+    gaps — common when pdfplumber collapses whitespace.
+    """
+    cols = [c.strip() for c in _TABLE_ROW_PATTERN.split(line) if c.strip()]
+    if len(cols) >= 2:
+        return cols
+    # Fallback: single-space split
+    return [c.strip() for c in line.split() if c.strip()]
 
 
 def _parse_table_structure(text: str) -> list[LabParameter]:
     """Detect tabular structures in OCR output and extract lab parameters.
 
-    Looks for lines that appear to be table rows (multiple columns separated
-    by whitespace) and tries to map the first column as the parameter name
-    and the second numeric column as the value.
+    Handles formats from real lab reports:
+    - Multi-space separated:  "Hemoglobin    14.5    g/dL    13.0 - 16.5"
+    - Single-space separated: "Hemoglobin 14.5 g/dL 13.0 - 16.5 Colorimetric"
+    - H/L flagged values:     "WBC Count H10570 /cmm" or "Fasting Blood Sugar H 141.0 mg/dL"
+    - Multi-word names:       "Fasting Blood Sugar", "RBC Count", "HbA1c"
 
     Requirements: 4.2
     """
     params: list[LabParameter] = []
     lines = text.splitlines()
 
-    # Heuristic: a table row has ≥2 whitespace-separated columns
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
 
-        # Split on 2+ spaces or tabs
-        cols = [c.strip() for c in _TABLE_ROW_PATTERN.split(stripped) if c.strip()]
+        cols = _split_lab_line(stripped)
         if len(cols) < 2:
             continue
 
-        name_col = cols[0]
-        canonical = _canonicalize_name(name_col)
+        # Try progressively shorter name prefixes (handles multi-word names)
+        # e.g. "Fasting Blood Sugar H 141.0 mg/dL ..." → try "Fasting Blood Sugar" first
+        canonical = None
+        name_end_idx = 0
+        max_name_words = min(5, len(cols))
+
+        for n in range(max_name_words, 0, -1):
+            candidate_name = " ".join(cols[:n])
+            canonical = _canonicalize_name(candidate_name)
+            if canonical is not None:
+                name_end_idx = n
+                break
+
         if canonical is None:
             continue
 
-        # Find the first numeric column after the name; also check the
-        # immediately following column for a unit string.
-        # Handles formats:
-        #   TestName    Value    Unit           (standard)
-        #   TestName    Value    RefRange    Unit  (Flabs style — unit is last)
+        remaining_cols = cols[name_end_idx:]
+        if not remaining_cols:
+            continue
+
+        # Find the first numeric value in remaining columns
+        # Strip H/L flag prefix (e.g. "H10570" → 10570, "H" followed by "141.0" → 141.0)
         value: Optional[float] = None
         unit_str = ""
         raw_text = stripped
-
-        remaining_cols = cols[1:]
-
-        # Check if last column looks like a unit (Flabs: Name Value RefRange Unit)
-        last_col = remaining_cols[-1] if remaining_cols else ""
-        last_is_unit = bool(re.match(r"^[A-Za-zµ%][A-Za-z0-9µ%/\-\.]*$", last_col)) and not re.search(r"\d", last_col)
+        value_col_idx = -1
 
         for idx, col in enumerate(remaining_cols):
-            m = re.match(r"^(\d+(?:\.\d+)?)\s*([A-Za-zµ%][A-Za-z0-9µ%/]*)?$", col)
-            if m:
-                value = float(m.group(1))
-                unit_str = (m.group(2) or "").strip()
-                if not unit_str:
-                    # Check next column for unit
-                    if idx + 1 < len(remaining_cols):
-                        next_col = remaining_cols[idx + 1]
-                        if re.match(r"^[A-Za-zµ%][A-Za-z0-9µ%/]*$", next_col) and not re.search(r"\d", next_col):
-                            unit_str = next_col
-                    # If still no unit and last col looks like unit, use it
-                    if not unit_str and last_is_unit and last_col != col:
-                        unit_str = last_col
+            # Check for H/L flag attached to number: "H10570", "L8.41"
+            hl_m = _HL_FLAG_PATTERN.match(col)
+            if hl_m:
+                value = float(hl_m.group(1))
+                value_col_idx = idx
                 break
+
+            # Plain number with optional unit: "14.5" or "14.5g/dL"
+            plain_m = re.match(r"^(\d+(?:\.\d+)?)\s*([A-Za-zµ%][A-Za-z0-9µ%/]*)?$", col)
+            if plain_m:
+                value = float(plain_m.group(1))
+                unit_str = (plain_m.group(2) or "").strip()
+                value_col_idx = idx
+                break
+
+            # Skip standalone H or L flag (e.g. col="H", next col is the number)
+            if col.upper() in ("H", "L") and idx + 1 < len(remaining_cols):
+                next_col = remaining_cols[idx + 1]
+                next_m = re.match(r"^(\d+(?:\.\d+)?)$", next_col)
+                if next_m:
+                    value = float(next_m.group(1))
+                    value_col_idx = idx + 1
+                    break
 
         if value is None:
             continue
 
+        # Look for unit in the column immediately after the value
+        if not unit_str and value_col_idx + 1 < len(remaining_cols):
+            next_col = remaining_cols[value_col_idx + 1]
+            if re.match(r"^[A-Za-zµ%][A-Za-z0-9µ%/]*$", next_col) and not re.search(r"\d", next_col):
+                unit_str = next_col
+
         norm_value, norm_unit = normalize_unit(value, unit_str, canonical)
-        ref = _REFERENCE_RANGES.get(canonical, (0.0, float("inf")))
+        ref = _REFERENCE_RANGES.get(canonical, (0.0, 999999.0))
         low = ref[0] if ref[0] is not None else 0.0
-        high = ref[1] if ref[1] is not None else float("inf")
+        high = ref[1] if ref[1] is not None else 999999.0  # JSON-safe upper bound
 
         param = LabParameter(
             name=canonical,
@@ -460,9 +509,9 @@ def parse_lab_parameters(text: str) -> list[LabParameter]:
         unit_str = (m.group("unit") or "").strip()
         norm_value, norm_unit = normalize_unit(value, unit_str, canonical)
 
-        ref = _REFERENCE_RANGES.get(canonical, (0.0, float("inf")))
+        ref = _REFERENCE_RANGES.get(canonical, (0.0, 999999.0))
         low = ref[0] if ref[0] is not None else 0.0
-        high = ref[1] if ref[1] is not None else float("inf")
+        high = ref[1] if ref[1] is not None else 999999.0  # JSON-safe upper bound
 
         param = LabParameter(
             name=canonical,

@@ -44,13 +44,23 @@ except ImportError:  # pragma: no cover
 DISEASE_NAMES = ["diabetes", "cvd", "ckd"]
 FEATURE_DIM = 14
 
-# Path to pre-trained model files
-_MODELS_DIR = Path(
+# Path to pre-trained model files — check both data/models/ and training/models/
+_MODELS_DIR_PRIMARY = Path(
     os.environ.get(
         "MODELS_DIR",
         str(Path(__file__).parent.parent.parent / "data" / "models"),
     )
 )
+_MODELS_DIR_TRAINING = Path(__file__).parent.parent.parent / "training" / "models"
+
+
+def _find_model_path(filename: str) -> Path | None:
+    """Search for a model file in primary and training model directories."""
+    for d in [_MODELS_DIR_PRIMARY, _MODELS_DIR_TRAINING]:
+        p = d / filename
+        if p.exists():
+            return p
+    return None
 
 # ---------------------------------------------------------------------------
 # Mock fallback (used when sklearn/xgboost are not installed)
@@ -104,8 +114,8 @@ def _load_model(filename: str, make_fallback):
     """Load a model from disk; return fallback if file not found or load fails."""
     if not _JOBLIB_AVAILABLE:
         return None
-    path = _MODELS_DIR / filename
-    if path.exists():
+    path = _find_model_path(filename)
+    if path is not None:
         try:
             return joblib.load(path)
         except Exception:
